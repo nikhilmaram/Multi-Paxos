@@ -19,10 +19,13 @@ requestLeaderLock = threading.RLock()
 
 
 connections_made=[]
-currLeader = "Srinu"
+ref_client_info = {}
+
+
 currLogEntry = 0
 
 
+currLeader = "Srinu"
 phase1Leader = "Srinu"
 
 

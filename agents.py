@@ -123,7 +123,8 @@ class Proposer(Thread):
 			self.instances[config.currLogEntry] = PaxosProposerProtocol(self)
 		self.instances[config.currLogEntry].sendProposedLeaderToAllAcceptors()
 		print "Please Wait......"
-		while(config.phase1Leader == None):
+		time.sleep(15)
+		while(config.phase1Leader == None and config.currLeader == None):
 			continue
 		print "Checking after time out"
 		if(config.phase1Leader == self.pid):

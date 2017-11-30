@@ -1,3 +1,5 @@
-Srinu  6744
-Nikhil 6746
-Jyothi 6745
+Srinu  6801 127.0.0.1  
+Nikhil 6802 127.0.0.1
+Jyothi 6803 127.0.0.1
+Manoj  6804 127.0.0.1
+Deedi  6805 127.0.0.1

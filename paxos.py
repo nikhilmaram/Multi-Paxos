@@ -12,7 +12,7 @@ import config
 
 name_info = {}
 port_info = {}
-ref_client_info = {}
+ip_info = {}
 port2client = {}
 client2name = {}
 
@@ -30,9 +30,11 @@ def parse_file(filename,processName):
 		if(a[0] == processName):
 			name_info['server'] = processName
 			port_info['server'] = int(a[1])
+			ip_info['server'] = a[2]
 		else:
 			name_info['client'+str(count)] = a[0]
 			port_info['client'+str(count)] = int(a[1])
+			ip_info['client'+str(count)] = a[2]
 			count = count + 1
 	## To get the information about the client if we know the port number	
 	for key,value in port_info.items():
@@ -79,62 +81,77 @@ class console_thread(Thread):
 				else:
 					print (self.name).upper() + ": Invalid input"	
 
+class config_thread(Thread):
 
-
-class server_thread(Thread):
-	def __init__(self,name,port,proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock):
+	def __init__(self,name,port,ip):
 		Thread.__init__(self)
 		self.name = name
 		self.port = port
+		self.ip = ip
+
+	def run(self):
+		config.server_socket = socket.socket()
+		config.server_socket.bind((self.ip,self.port))
+		config.server_socket.listen(6)
+
+		config.client,config.addr = config.server_socket.accept()
+		config.client_info = config.client.recv(1024)
+		config.connections_made.append(name_info[port2client[config.client_info]])
+		config.ref_client_info[str(port2client[config.client_info])] = config.client
+		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client_info]] + " has been formed."
+	
+
+		config.client1,config.addr1 = config.server_socket.accept()
+		config.client1_info = config.client1.recv(1024)
+		config.connections_made.append(name_info[port2client[config.client1_info]])
+		config.ref_client_info[str(port2client[config.client1_info])] = config.client1
+		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client1_info]] + " has been formed."
+	
+		config.client2,config.addr2 = config.server_socket.accept()
+		config.client2_info = config.client2.recv(1024)
+		config.connections_made.append(name_info[port2client[config.client2_info]])
+		config.ref_client_info[str(port2client[config.client2_info])] = config.client2
+		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client2_info]] + " has been formed."
+		
+
+		config.client3,config.addr3 = config.server_socket.accept()
+		config.client3_info = config.client3.recv(1024)
+		config.connections_made.append(name_info[port2client[config.client3_info]])
+		config.ref_client_info[str(port2client[config.client3_info])] = config.client3
+		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client3_info]] + " has been formed."
+		
+
+		config.client4,config.addr4 = config.server_socket.accept()
+		config.client4_info = config.client4.recv(1024)
+		config.connections_made.append(name_info[port2client[config.client4_info]])
+		config.ref_client_info[str(port2client[config.client4_info])] = config.client4
+		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client4_info]] + " has been formed."
+
+		##ref_client_info[str(port2client[self.client3_info])] = self.client3		
+		print config.ref_client_info
+		print name_info
+		print client2name
+
+
+
+
+
+class server_thread(Thread):
+	def __init__(self,name,port,ip,proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock):
+		Thread.__init__(self)
+		self.name = name
+		self.port = port
+		self.ip = ip
 		self.proposerToServerQueueLock = proposerToServerQueueLock
 		self.acceptorToServerQueueLock = acceptorToServerQueueLock
 		self.learnerToServerQueueLock  = learnerToServerQueueLock
 
 	def run(self):
-		self.invoke_server()
+		##self.invoke_server()
 		self.send_info()
-		self.server_socket.close()
-
-
-	def invoke_server(self):
-		self.server_socket = socket.socket()
-		self.server_socket.bind(('',self.port))
-		self.server_socket.listen(5)
-		
-		self.client,self.addr = self.server_socket.accept()
-		self.client_info = self.client.recv(1024)
-		config.connections_made.append(name_info[port2client[self.client_info]])
-		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[self.client_info]] + " has been formed."
-	
-
-		self.client1,self.addr1 = self.server_socket.accept()
-		self.client1_info = self.client1.recv(1024)
-		config.connections_made.append(name_info[port2client[self.client1_info]])
-		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[self.client1_info]] + " has been formed."
-	
-		self.client2,self.addr2 = self.server_socket.accept()
-		self.client2_info = self.client2.recv(1024)
-		config.connections_made.append(name_info[port2client[self.client2_info]])
-		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[self.client2_info]] + " has been formed."
-
-		###self.client3,self.addr3 = self.server_socket.accept()
-		###self.client3_info = self.client3.recv(1024)
-		###connections_made.append(name_info[port2client[self.client3_info]])
-		###print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[self.client3_info]] + " has been formed."
-
-		self.assign_clients()
-
-
-	def assign_clients(self):
-		ref_client_info[str(port2client[self.client_info])] = self.client
-		ref_client_info[str(port2client[self.client1_info])] = self.client1
-		ref_client_info[str(port2client[self.client2_info])] = self.client2
-		##ref_client_info[str(port2client[self.client3_info])] = self.client3		
-		print ref_client_info
-		print name_info
-		print client2name
 	
 	def send_info(self):
+		time.sleep(1)
 		while(config.active):
 			## This is just used for testing making the server sleep so other process thinks it is dead
 			while(not config.consoleToServerQueue.empty()):
@@ -152,7 +169,7 @@ class server_thread(Thread):
 				print "proposer put something to server"
 				self.proposerToServerQueueLock.acquire()
 				msg = config.proposerToServerQueue.get()
-				ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
 				self.proposerToServerQueueLock.release()
 				time.sleep(0)
 			
@@ -161,7 +178,7 @@ class server_thread(Thread):
 				print "acceptor put something to server"
 				self.acceptorToServerQueueLock.acquire()
 				msg = config.acceptorToServerQueue.get()
-				ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
 				self.acceptorToServerQueueLock.release()
 				time.sleep(0)
 
@@ -171,7 +188,7 @@ class server_thread(Thread):
 				print "learner put something to server"
 				self.learnerToServerQueueLock.acquire()
 				msg = config.learnerToServerQueue.get()
-				ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
 				self.learnerToServerQueueLock.release()
 				time.sleep(0)
 			time.sleep(0)
@@ -179,16 +196,18 @@ class server_thread(Thread):
 
 		## Sending Quit message to all the clients
 		for names in config.connections_made:
-			ref_client_info[client2name[names]].send(pickle.dumps("Quit"))
+			config.ref_client_info[client2name[names]].send(pickle.dumps("Quit"))
+		config.server_socket.close()
 
 			## Later for reconfiguration you can constantly check for the new connections
 
 
 class client_thread(Thread):
-	def __init__(self,name,port,clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock):
+	def __init__(self,name,port,ip,clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock):
 		Thread.__init__(self)
 		self.name = name
 		self.port = port
+		self.ip = ip
 		self.clientToProposerQueueLock = clientToProposerQueueLock
 		self.clientToAcceptorQueueLock = clientToAcceptorQueueLock
 		self.clientToLearnerQueueLock  = clientToLearnerQueueLock
@@ -286,23 +305,29 @@ def process(argv):
 	acceptorToServerQueueLock  = threading.RLock()  
 	learnerToServerQueueLock   = threading.RLock() 
 	consoleToProposerQueueLock = threading.RLock()
+
 	console = console_thread(name_info['server'],consoleToProposerQueueLock)
-	server  = server_thread(name_info['server'],port_info['server'],proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock)
-	client  = client_thread(name_info['server'],port_info['server'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
-	client1 = client_thread(name_info['client1'],port_info['client1'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
-	client2 = client_thread(name_info['client2'],port_info['client2'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
-	##client3 = client(name_info['client3'],port_info['client3'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
-	##client4 = client(name_info['client4'],port_info['client4'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
+	server  = server_thread(name_info['server'],port_info['server'],ip_info['server'],proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock)
+	client  = client_thread(name_info['server'],port_info['server'],ip_info['server'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
+	client1 = client_thread(name_info['client1'],port_info['client1'],ip_info['client1'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
+	client2 = client_thread(name_info['client2'],port_info['client2'],ip_info['client2'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
+	client3 = client_thread(name_info['client3'],port_info['client3'],ip_info['client3'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
+	client4 = client_thread(name_info['client4'],port_info['client4'],ip_info['client4'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
+
+	config = config_thread(name_info['server'],port_info['server'],ip_info['server'])
+	
 
 	proposer = Proposer(name_info['server'],consoleToProposerQueueLock,proposerToServerQueueLock,clientToProposerQueueLock,30,"Srinu")
 	acceptor = Acceptor(name_info['server'],clientToAcceptorQueueLock,acceptorToServerQueueLock,"Srinu")
 	learner  = Learner(name_info['server'],clientToLearnerQueueLock)
 	console.start()
+	config.start()
 	server.start()
 	client.start()
 	client1.start()
 	client2.start()
-	#client3.start();client4.start(),client5.start()
+	client3.start() 
+	client4.start()
 	proposer.start()
 	acceptor.start()
 	learner.start()
