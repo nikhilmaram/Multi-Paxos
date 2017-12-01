@@ -12,6 +12,8 @@ acceptorToServerQueue  = queue.Queue()
 learnerToServerQueue   = queue.Queue()
 consoleToProposerQueue = queue.Queue()
 consoleToServerQueue   = queue.Queue()
+stateMachineToServerQueue = queue.Queue()
+
 
 requestSentToLeaderQueue = deque()
 requestLeaderLock = threading.RLock()
@@ -34,5 +36,8 @@ prevRecvHeartBeat = 0
 
 log = {}
 
+## for testing purpose
+msgLog = {}
 
 active = True
+totalNumTickets = 200

@@ -122,3 +122,22 @@ class sendAcceptedValueToLearners(Message):
 		self.leaderId = leaderId
 		self.recvId = recvId
 
+
+
+class sendRequestForLogEntries():
+	def __init__(self,senderId,requestedIndex,recvId):
+		self.senderId = senderId
+		self.requestedIndex = requestedIndex
+		self.recvId = recvId
+
+
+
+class sendLogEntriesMessage(Message):
+	def __init__(self,clientMsg,recvId,value,requestedIndex):
+		super(sendLogEntriesMessage,self).__init__(clientMsg)
+		self.value = value
+		self.recvId = recvId
+		self.requestedIndex = requestedIndex	
+
+
+
