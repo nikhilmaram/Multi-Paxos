@@ -203,10 +203,11 @@ class Acceptor(Thread):
 
 
 class Learner(Thread):
-	def __init__(self,pid,clientToLearnerQueueLock):
+	def __init__(self,pid,clientToLearnerQueueLock,learnerToServerQueueLock):
 		Thread.__init__(self)
 		self.pid = pid
 		self.clientToLearnerQueueLock = clientToLearnerQueueLock
+		self.learnerToServerQueueLock = learnerToServerQueueLock
 		self.Active = True
 		self.instances = {}
 
@@ -219,6 +220,10 @@ class Learner(Thread):
 				self.clientToLearnerQueueLock.release()
 				if isinstance(msg,sendAcceptedValueToLearners):
 					self.handle_accepted_value_from_acceptors(msg)
+				if isinstance(msg,sendRequestForLogEntries):
+					self.send_log_entries(msg)
+				if isinstance(msg,sendLogEntriesMessage):
+					self.update_log(msg)
 			time.sleep(0)
 
 
@@ -228,4 +233,86 @@ class Learner(Thread):
 			self.instances[logEntry] = PaxosLearnerAcceptingValueProtocol(self)
 
 		self.instances[logEntry].updateResponse(msg)
-	 
+	
+
+	def send_log_entries(self,msg):
+		## if the process has the requested log entry then it will send the message back to the requestor
+		index = msg.requestedIndex
+		print "In sending Log Entries"
+		if index in config.msgLog.keys():
+			print "Process has the index and sendint the index"
+			sendMsg = sendLogEntriesMessage(config.msgLog[index].clientMsg,msg.senderId,config.msgLog[index].value,msg.requestedIndex)
+			self.learnerToServerQueueLock.acquire()
+			config.learnerToServerQueue.put(sendMsg)
+			self.learnerToServerQueueLock.release()
+
+	def update_log(self,msg):
+		key = msg.requestedIndex
+		if key not in config.msgLog.keys():
+			print "Updated Log Entry"
+			config.msgLog[key] = msg
+			config.log[key] = msg.value
+			print config.msgLog
+		
+
+## Start the state machine on a separate thread which checks for the log entries
+class StateMachine(Thread):
+	def __init__(self,pid,stateMachineToServerQueueLock):
+		Thread.__init__(self)
+		self.pid = pid
+		self.stateMachineToServerQueueLock = stateMachineToServerQueueLock
+		self.currIndex = 0
+		self.nextAvailableIndex = 0
+		self.requestedIndex = 0
+		self.prevRequestedIndex = 0
+		self.prevRequestTime = time.time()
+		self.numOfTickets = 0
+
+	def run(self):
+		while(config.active):
+			## if there is an index i.e previous check Index + 1 then process it.
+			## if there is a gap in the index then we request for data from other active process
+			for key in config.msgLog.keys():			
+				if(key > self.currIndex):
+					self.nextAvailableIndex = key
+					print "Has an extra key to process ....."
+					if(self.nextAvailableIndex == self.currIndex + 1):
+						## Now process the log entry
+						print "State Machine processing the log entry......"
+						self.currIndex = self.nextAvailableIndex
+						msg = config.msgLog[self.currIndex]
+						
+						if (msg.clientMsg.clientSource == self.pid):
+							print "Tickets requested....."
+							if(self.numOfTickets + msg.value < config.totalNumTickets):
+								print "Please take the requested tickets......"
+								self.numOfTickets = self.numOfTickets + msg.value
+							else:
+								print "Declined Transaction : Avaiable Tickets : " +str(config.totalNumTickets - self.numOfTickets)
+						else:
+							if(self.numOfTickets + msg.value < config.totalNumTickets):
+								self.numOfTickets = self.numOfTickets + msg.value
+		
+					else:	
+						self.requestedIndex = self.currIndex + 1
+						## we still didnt get the index which we have requested for, send the request again
+						if((self.prevRequestedIndex == self.requestedIndex) and (self.prevRequestTime + 10 < time.time())):
+							print "Same request trying again"
+							print "Requested Index : " + str(self.requestedIndex)
+							self.prevRequestTime = time.time()
+							self.requestForLogEntries()
+						elif(self.prevRequestedIndex != self.requestedIndex):
+							print "Trying another request"	
+							print "Requested Index : " + str(self.requestedIndex)
+							self.prevRequestedIndex = self.requestedIndex
+							self.prevRequestTime = time.time()
+							self.requestForLogEntries()
+			time.sleep(0)
+
+
+	def requestForLogEntries(self):
+		self.stateMachineToServerQueueLock.acquire()
+		for recv_id in config.connections_made: 
+			msg = sendRequestForLogEntries(self.pid,self.requestedIndex,recv_id)
+			config.stateMachineToServerQueue.put(msg)
+		self.stateMachineToServerQueueLock.release()
