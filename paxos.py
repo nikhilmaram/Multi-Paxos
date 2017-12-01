@@ -137,7 +137,7 @@ class config_thread(Thread):
 
 
 class server_thread(Thread):
-	def __init__(self,name,port,ip,proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock):
+	def __init__(self,name,port,ip,proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock,stateMachineToServerQueueLock):
 		Thread.__init__(self)
 		self.name = name
 		self.port = port
@@ -145,6 +145,7 @@ class server_thread(Thread):
 		self.proposerToServerQueueLock = proposerToServerQueueLock
 		self.acceptorToServerQueueLock = acceptorToServerQueueLock
 		self.learnerToServerQueueLock  = learnerToServerQueueLock
+		self.stateMachineToServerQueueLock = stateMachineToServerQueueLock
 
 	def run(self):
 		##self.invoke_server()
@@ -158,8 +159,13 @@ class server_thread(Thread):
 				msg = config.consoleToServerQueue.get()
 				if (msg == "Sleep"):
 					print "Sleep Started ..............."
-					time.sleep(100)
+					time.sleep(10)
 					print "Sleep Ended ..............."
+					config.proposerToServerQueue.queue.clear()
+					config.acceptorToServerQueue.queue.clear()
+					config.learnerToServerQueue.queue.clear()
+					config.stateMachineToServerQueue.queue.clear()
+					## Emptying all the queues connected to server
 
 
 			## Have totally 3 queues which server needs to check
@@ -191,6 +197,16 @@ class server_thread(Thread):
 				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
 				self.learnerToServerQueueLock.release()
 				time.sleep(0)
+
+			## Checking for the request made by state machine in case of missing log entries
+			while(not config.stateMachineToServerQueue.empty()):
+				print "State Machine put something to server"
+				self.stateMachineToServerQueueLock.acquire()
+				msg = config.stateMachineToServerQueue.get()
+				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				self.stateMachineToServerQueueLock.release()
+				time.sleep(0)
+				
 			time.sleep(0)
 
 
@@ -290,6 +306,20 @@ class client_thread(Thread):
 				self.clientToAcceptorQueueLock.acquire()
 				config.clientToAcceptorQueue.put(recvdMessage)
 				self.clientToAcceptorQueueLock.release()
+
+			## if received a message from another process state machine for acquiring logs
+			if isinstance(recvdMessage,sendRequestForLogEntries):
+				print "client received a message from annother process state machine for log entries.Putting the message in learner queue"
+				self.clientToLearnerQueueLock.acquire()
+				config.clientToLearnerQueue.put(recvdMessage)
+				self.clientToLearnerQueueLock.release()
+
+			## if received log entries message from another process, send it to the learner it will update
+			if isinstance(recvdMessage,sendLogEntriesMessage):
+				print "Client received missing log entries from another process"
+				self.clientToLearnerQueueLock.acquire()
+				config.clientToLearnerQueue.put(recvdMessage)
+				self.clientToLearnerQueueLock.release()
 	
 			time.sleep(0)
 
@@ -305,9 +335,11 @@ def process(argv):
 	acceptorToServerQueueLock  = threading.RLock()  
 	learnerToServerQueueLock   = threading.RLock() 
 	consoleToProposerQueueLock = threading.RLock()
+	stateMachineToServerQueueLock = threading.RLock()
+	
 
 	console = console_thread(name_info['server'],consoleToProposerQueueLock)
-	server  = server_thread(name_info['server'],port_info['server'],ip_info['server'],proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock)
+	server  = server_thread(name_info['server'],port_info['server'],ip_info['server'],proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock,stateMachineToServerQueueLock)
 	client  = client_thread(name_info['server'],port_info['server'],ip_info['server'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
 	client1 = client_thread(name_info['client1'],port_info['client1'],ip_info['client1'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
 	client2 = client_thread(name_info['client2'],port_info['client2'],ip_info['client2'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
@@ -319,7 +351,9 @@ def process(argv):
 
 	proposer = Proposer(name_info['server'],consoleToProposerQueueLock,proposerToServerQueueLock,clientToProposerQueueLock,30,"Srinu")
 	acceptor = Acceptor(name_info['server'],clientToAcceptorQueueLock,acceptorToServerQueueLock,"Srinu")
-	learner  = Learner(name_info['server'],clientToLearnerQueueLock)
+	learner  = Learner(name_info['server'],clientToLearnerQueueLock,learnerToServerQueueLock)
+
+	stateMachine = StateMachine(name_info['server'],stateMachineToServerQueueLock)
 	console.start()
 	config.start()
 	server.start()
@@ -331,7 +365,7 @@ def process(argv):
 	proposer.start()
 	acceptor.start()
 	learner.start()
-   
+  	stateMachine.start() 
 
 
 

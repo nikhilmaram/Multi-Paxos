@@ -104,6 +104,8 @@ class PaxosLearnerAcceptingValueProtocol:
 		majority = len(config.connections_made)/2 + 1
 		if (len(self.responses) >= majority):
 			config.log[msg.logEntry] = msg.value
+			## storing the complete msg in another log
+			config.msgLog[msg.logEntry] = msg
 			## The log entry is set here because it is way of telling the proposer that log has entries till this entry.
 			config.currLogEntry = msg.logEntry
 			## During the leader election, if there is a race,server getting majority in the second round is winner
