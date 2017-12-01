@@ -13,11 +13,10 @@ learnerToServerQueue   = queue.Queue()
 consoleToProposerQueue = queue.Queue()
 consoleToServerQueue   = queue.Queue()
 stateMachineToServerQueue = queue.Queue()
-
+consoleToStateMachineQueue = queue.Queue()
 
 requestSentToLeaderQueue = deque()
 requestLeaderLock = threading.RLock()
-
 
 
 connections_made=[]

@@ -270,11 +270,21 @@ class StateMachine(Thread):
 
 	def run(self):
 		while(config.active):
+			
+			## if there are show messages from the console
+
+			while(not config.consoleToStateMachineQueue.empty()):
+				msg = config.consoleToStateMachineQueue.get()
+				if(msg == "Show"):
+					print config.msgLog
+					print config.log
+			
 			## if there is an index i.e previous check Index + 1 then process it.
 			## if there is a gap in the index then we request for data from other active process
 			for key in config.msgLog.keys():			
 				if(key > self.currIndex):
 					self.nextAvailableIndex = key
+					print "Next Available Index = %s , Curr Index : %s" %(str(self.nextAvailableIndex), str(self.currIndex))
 					print "Has an extra key to process ....."
 					if(self.nextAvailableIndex == self.currIndex + 1):
 						## Now process the log entry
@@ -285,7 +295,7 @@ class StateMachine(Thread):
 						if (msg.clientMsg.clientSource == self.pid):
 							print "Tickets requested....."
 							if(self.numOfTickets + msg.value < config.totalNumTickets):
-								print "Please take the requested tickets......"
+								print "Please take the requested tickets : " + str(msg.value)
 								self.numOfTickets = self.numOfTickets + msg.value
 							else:
 								print "Declined Transaction : Avaiable Tickets : " +str(config.totalNumTickets - self.numOfTickets)

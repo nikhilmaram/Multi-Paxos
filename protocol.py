@@ -54,7 +54,8 @@ class PaxosAcceptorProtocol:
 				self.sendAcceptedValueToAllLearners(msg)
 
 			else:
-				## Send the NAK to the process since the value is already present in the log. Currently not required
+				## Send the NAK to the process since the value is already present in the log. Currently not required.
+				## Since if the value is sent to majority of the acceptors then learners would have know about and entered into log
 				pass
 
 	def sendAcceptedValueToAllLearners(self,msg):

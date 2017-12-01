@@ -14,6 +14,8 @@ class clientMessage:
 		self.timeStamp = timeStamp
 		self.value = value
 		self.msgId = msgId
+	def __repr__(self):
+		return "Client Source = %s, MsgId = %s," %(self.clientSource,self.MsgId)
 
 class hearBeatMessage:
 	def __init__(self,leaderId,recvId):	
@@ -122,6 +124,11 @@ class sendAcceptedValueToLearners(Message):
 		self.leaderId = leaderId
 		self.recvId = recvId
 
+	def __repr__(self):
+		return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
+	##def __str__(self):
+	##	return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
+
 
 
 class sendRequestForLogEntries():
@@ -139,5 +146,9 @@ class sendLogEntriesMessage(Message):
 		self.recvId = recvId
 		self.requestedIndex = requestedIndex	
 
+	def __repr__(self):
+		return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
+	def __str__(self):
+		return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
 
 

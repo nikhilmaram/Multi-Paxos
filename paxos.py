@@ -77,6 +77,9 @@ class console_thread(Thread):
 				elif (line.split()[0]=="Sleep"):
 					msg = "Sleep"
 					config.consoleToServerQueue.put(msg)
+				elif(line.split()[0] == "Show"):
+					msg = "Show"
+					config.consoleToStateMachineQueue.put(msg)
 				
 				else:
 					print (self.name).upper() + ": Invalid input"	
@@ -256,6 +259,7 @@ class client_thread(Thread):
 			recvdMessage = pickle.loads(recvd)
 			print "Client received a message"
 			
+					
 			## Can be removed later
 			if recvdMessage == "Quit":
 				break
