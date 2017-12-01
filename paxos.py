@@ -8,18 +8,12 @@ import socket,pickle
 import config
 
 
-
-
 name_info = {}
 port_info = {}
 ip_info = {}
 port2client = {}
 client2name = {}
 
-
-##serverActive = True
-##clientActive = True
-##active = True
 
 
 def parse_file(filename,processName):
@@ -51,9 +45,6 @@ class console_thread(Thread):
 		self.msgCount = 0 
 	
 	def run(self):
-		global serverActive
-		global clientActive
-		##global active
 		config.active = True 
 		while(True):
   			line = sys.stdin.readline().strip()
@@ -86,11 +77,12 @@ class console_thread(Thread):
 
 class config_thread(Thread):
 
-	def __init__(self,name,port,ip):
+	def __init__(self,name,port,ip,configToProposerQueueLock):
 		Thread.__init__(self)
 		self.name = name
 		self.port = port
 		self.ip = ip
+		self.configToProposerQueueLock = configToProposerQueueLock
 
 	def run(self):
 		config.server_socket = socket.socket()
@@ -122,13 +114,21 @@ class config_thread(Thread):
 		config.connections_made.append(name_info[port2client[config.client3_info]])
 		config.ref_client_info[str(port2client[config.client3_info])] = config.client3
 		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client3_info]] + " has been formed."
-		
+		## Send this configuration message to the propser queue if you are the leader
+		if(self.name == config.currLeader):
+			self.configToProposerQueueLock.acquire()
+			config.configToProposerQueue.put(name_info[port2client[config.client3_info]])
+			self.configToProposerQueueLock.release()
 
 		config.client4,config.addr4 = config.server_socket.accept()
 		config.client4_info = config.client4.recv(1024)
 		config.connections_made.append(name_info[port2client[config.client4_info]])
 		config.ref_client_info[str(port2client[config.client4_info])] = config.client4
 		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client4_info]] + " has been formed."
+		if(self.name == config.currLeader):
+			self.configToProposerQueueLock.acquire()
+			config.configToProposerQueue.put(name_info[port2client[config.client4_info]])
+			self.configToProposerQueueLock.release()
 
 		##ref_client_info[str(port2client[self.client3_info])] = self.client3		
 		print config.ref_client_info
@@ -162,7 +162,7 @@ class server_thread(Thread):
 				msg = config.consoleToServerQueue.get()
 				if (msg == "Sleep"):
 					print "Sleep Started ..............."
-					time.sleep(10)
+					time.sleep(200)
 					print "Sleep Ended ..............."
 					config.proposerToServerQueue.queue.clear()
 					config.acceptorToServerQueue.queue.clear()
@@ -275,6 +275,22 @@ class client_thread(Thread):
 				config.clientToAcceptorQueue.put(recvdMessage)
 				self.clientToAcceptorQueueLock.release()
 
+
+			## if received message is a message from proposer to acceptor for proposing configuration then send it to acceptor
+			if isinstance(recvdMessage,configurationMessageToAcceptors):
+				print "client received message from proposer to acceptor to accept configuration"
+				self.clientToAcceptorQueueLock.acquire()
+				config.clientToAcceptorQueue.put(recvdMessage)
+				self.clientToAcceptorQueueLock.release()
+
+
+			## if received message is a message from acceptor to learner to accept the configuration then send it to learner
+			if isinstance(recvdMessage,configurationMessageToLearners):
+				print "client received message from acceptot to Learner to accept configuration"
+				self.clientToLearnerQueueLock.acquire()
+				config.clientToLearnerQueue.put(recvdMessage)
+				self.clientToLearnerQueueLock.release()
+
 			## if received message is a message from acceptor that it has accepted proposed value send it to the proposer
 			if isinstance(recvdMessage,sendAcceptedValueToLeader):
 				print "client received message from acceptor to leader that it has accepted"
@@ -340,7 +356,7 @@ def process(argv):
 	learnerToServerQueueLock   = threading.RLock() 
 	consoleToProposerQueueLock = threading.RLock()
 	stateMachineToServerQueueLock = threading.RLock()
-	
+	configToProposerQueueLock = threading.RLock()	
 
 	console = console_thread(name_info['server'],consoleToProposerQueueLock)
 	server  = server_thread(name_info['server'],port_info['server'],ip_info['server'],proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock,stateMachineToServerQueueLock)
@@ -350,10 +366,10 @@ def process(argv):
 	client3 = client_thread(name_info['client3'],port_info['client3'],ip_info['client3'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
 	client4 = client_thread(name_info['client4'],port_info['client4'],ip_info['client4'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
 
-	config = config_thread(name_info['server'],port_info['server'],ip_info['server'])
+	config = config_thread(name_info['server'],port_info['server'],ip_info['server'],configToProposerQueueLock)
 	
 
-	proposer = Proposer(name_info['server'],consoleToProposerQueueLock,proposerToServerQueueLock,clientToProposerQueueLock,30,"Srinu")
+	proposer = Proposer(name_info['server'],consoleToProposerQueueLock,proposerToServerQueueLock,clientToProposerQueueLock,configToProposerQueueLock,"Srinu")
 	acceptor = Acceptor(name_info['server'],clientToAcceptorQueueLock,acceptorToServerQueueLock,"Srinu")
 	learner  = Learner(name_info['server'],clientToLearnerQueueLock,learnerToServerQueueLock)
 

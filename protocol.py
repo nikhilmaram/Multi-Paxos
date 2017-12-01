@@ -19,6 +19,18 @@ class PaxosProposerProtocol:
 			config.proposerToServerQueue.put(proposedValueMessage)
 			self.agent.proposerToServerQueueLock.release()
 
+
+	def sendConfigurationMessageToAllAcceptors(self,newId,clientMsg):
+		## Doing it exactly like the normal messages
+		ballotNumInst = BallotNum(self.agent.pid,self.sequenceNum)
+		for recv_id in config.connections_made :
+			print "Protocol : proposer sending configuration to acceptors"
+			proposedConfigurationMessage = configurationMessageToAcceptors(clientMsg,config.currLogEntry,newId,recv_id)
+			self.agent.proposerToServerQueueLock.acquire()
+			config.proposerToServerQueue.put(proposedConfigurationMessage)
+			self.agent.proposerToServerQueueLock.release()
+
+
 	def accepted_value_from_acceptor(self,msg):
 		self.acceptedResponses[msg.senderId] = msg.value
 
@@ -32,6 +44,8 @@ class PaxosProposerProtocol:
 			config.proposerToServerQueue.put(proposedLeaderMessage) 
 			self.agent.proposerToServerQueueLock.release()
 			print "Log Value : " + str(config.currLogEntry)
+
+
 
 class PaxosAcceptorProtocol:
 	def __init__(self,agent):
@@ -68,6 +82,13 @@ class PaxosAcceptorProtocol:
 			self.agent.acceptorToServerQueueLock.release()
 
 
+	def sendAcceptedConfigurationToAllLearners(self,msg):
+		for recv_id in config.connections_made:
+			print "Protocol :acceptor sending accepted configuration to learner"
+			acceptedConfigurationMessage = configurationMessageToLearners(msg.clientMsg,msg.logEntry,self.agent.pid,msg.newId,recv_id)
+			self.agent.acceptorToServerQueueLock.acquire()
+			config.acceptorToServerQueue.put(acceptedConfigurationMessage)
+			self.agent.acceptorToServerQueueLock.release()
 
 	def sendAcceptedLeaderToProposer(self,msg):
 		print "Message : Num Value :" + str(msg.ballotNum.num) + " Agent Id : " + str(msg.ballotNum.id)
@@ -108,7 +129,7 @@ class PaxosLearnerAcceptingValueProtocol:
 			config.log[msg.logEntry] = msg.value
 			## storing the complete msg in another log
 			config.msgLog[msg.logEntry] = msg
-			## The log entry is set here because it is way of telling the proposer that log has entries till this entry.
+			## The log entry is set here because it is way of telling the proposer that log has entries till this entry if the process becomes a leader.
 			config.currLogEntry = msg.logEntry
 			## During the leader election, if there is a race,server getting majority in the second round is winner
 			config.currLeader = msg.leaderId

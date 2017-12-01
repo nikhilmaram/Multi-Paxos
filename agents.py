@@ -15,13 +15,13 @@ class Agent:
 
 
 class Proposer(Thread):
-	def __init__(self,pid,consoleToProposerQueueLock,proposerToServerQueueLock,clientToProposerQueueLock,tolerance,currLeader):
+	def __init__(self,pid,consoleToProposerQueueLock,proposerToServerQueueLock,clientToProposerQueueLock,configToProposerQueueLock,currLeader):
 		Thread.__init__(self)
 		self.pid = pid
 		self.consoleToProposerQueueLock = consoleToProposerQueueLock
 		self.proposerToServerQueueLock  = proposerToServerQueueLock
 		self.clientToProposerQueueLock  = clientToProposerQueueLock
-		self.tolerance = tolerance
+		self.configToProposerQueueLock  = configToProposerQueueLock
 		##self.currLogEntry = 0
 		self.prevAcceptedLogEntry = 0
 		self.Active = True
@@ -77,7 +77,17 @@ class Proposer(Thread):
 					else:
 						print "Got the same message again ............"
 						self.handle_client_request(msg.clientMsg,resp)
-				time.sleep(0)	
+				time.sleep(0)
+
+
+			## If there is a configuration change then we get the message from queue
+			while(not config.configToProposerQueue.empty()):
+				print "A new configuration message has been obtained"
+				self.configToProposerQueueLock.acquire()
+				newId = config.configToProposerQueue.get()
+				self.configToProposerQueueLock.release()
+				config.currLogEntry = config.currLogEntry + 1
+				self.handle_configuration_message(newId,config.currLogEntry)		
 
 			if(len(config.requestSentToLeaderQueue) > 0):
 				##print "Checking if request retry is needed"
@@ -108,6 +118,14 @@ class Proposer(Thread):
 			self.instances[logEntry] = PaxosProposerProtocol(self,msg)
 		self.instances[logEntry].sendProposedValueToAllAcceptors(msg)
 
+	def handle_configuration_message(self,newId,logEntry):
+		## Creating this client message just to maintain consisitency with normal messages not required actually.
+		clientMsg = clientMessage(self.pid,time.time(),0,"-1")
+		if logEntry not in self.instances.keys():
+			self.instances[logEntry] = PaxosProposerProtocol(self,clientMsg)
+		self.instances[logEntry].sendConfigurationMessageToAllAcceptors(newId,clientMsg)
+			
+
 
 	def handle_accepted_value_from_acceptor(self,msg):
 		self.instances[msg.logEntry].accepted_value_from_acceptor(msg)
@@ -137,7 +155,7 @@ class Proposer(Thread):
 			self.instances[config.currLogEntry] = PaxosProposerProtocol(self,msg)
 		self.instances[config.currLogEntry].sendProposedLeaderToAllAcceptors()
 		print "Please Wait......"
-		time.sleep(15)
+		###time.sleep(15)
 		while(config.phase1Leader == None and config.currLeader == None):
 			continue
 		print "Checking after time out"
@@ -146,6 +164,7 @@ class Proposer(Thread):
 			self.handle_client_request(msg,config.currLogEntry)
 		else :
 			print "Current process has not be chosen as a leader"
+			pass
 		
 	
 	def send_hearbeat(self):
@@ -180,8 +199,13 @@ class Acceptor(Thread):
 				self.clientToAcceptorQueueLock.acquire()	
 				recvdMsg = config.clientToAcceptorQueue.get()
 				self.clientToAcceptorQueueLock.release()
+				
 				if isinstance(recvdMsg,sendProposedValueToAcceptors):
 					self.handle_value_from_proposer(recvdMsg)
+				
+
+				if isinstance(recvdMsg,configurationMessageToAcceptors):
+					self.handle_configuration_from_proposer(recvdMsg)
 
 				## Acceptor has got a proposal from another process which wants to be a leader
 				if isinstance(recvdMsg,sendProposedLeaderToAcceptors):
@@ -201,6 +225,13 @@ class Acceptor(Thread):
 		self.instances[logEntry].sendAcceptedValueToProposer(msg)
 
 
+	def handle_configuration_from_proposer(self,msg):
+		logEntry = msg.logEntry
+		## if logEntry is already present
+		if logEntry not in self.instances.keys(): 
+			self.instances[logEntry] = PaxosAcceptorProtocol(self)
+		self.instances[logEntry].sendAcceptedConfigurationToAllLearners(msg)
+	
 	def handle_leaderMsg_from_proposer(self,msg):
 		## Acceptor has got a proposal from another process which wants to be a leader
 		logEntry = msg.logEntry	
@@ -238,6 +269,8 @@ class Learner(Thread):
 					self.send_log_entries(msg)
 				if isinstance(msg,sendLogEntriesMessage):
 					self.update_log(msg)
+				if isinstance(msg,configurationMessageToLearners):
+					self.handle_accepted_value_from_acceptors(msg)
 			time.sleep(0)
 
 
@@ -245,7 +278,6 @@ class Learner(Thread):
 		logEntry = msg.logEntry
 		if logEntry not in self.instances.keys():
 			self.instances[logEntry] = PaxosLearnerAcceptingValueProtocol(self)
-
 		self.instances[logEntry].updateResponse(msg)
 	
 
@@ -305,17 +337,17 @@ class StateMachine(Thread):
 						print "State Machine processing the log entry......"
 						self.currIndex = self.nextAvailableIndex
 						msg = config.msgLog[self.currIndex]
-						
-						if (msg.clientMsg.clientSource == self.pid):
-							print "Tickets requested....."
-							if(self.numOfTickets + msg.value < config.totalNumTickets):
-								print "Please take the requested tickets : " + str(msg.value)
-								self.numOfTickets = self.numOfTickets + msg.value
+						if not isinstance(msg,configurationMessageToLearners):			
+							if (msg.clientMsg.clientSource == self.pid):
+								print "Tickets requested....."
+								if(self.numOfTickets + msg.value < config.totalNumTickets):
+									print "Please take the requested tickets : " + str(msg.value)
+									self.numOfTickets = self.numOfTickets + msg.value
+								else:
+									print "Declined Transaction : Avaiable Tickets : " +str(config.totalNumTickets - self.numOfTickets)
 							else:
-								print "Declined Transaction : Avaiable Tickets : " +str(config.totalNumTickets - self.numOfTickets)
-						else:
-							if(self.numOfTickets + msg.value < config.totalNumTickets):
-								self.numOfTickets = self.numOfTickets + msg.value
+								if(self.numOfTickets + msg.value < config.totalNumTickets):
+									self.numOfTickets = self.numOfTickets + msg.value
 		
 					else:	
 						self.requestedIndex = self.currIndex + 1

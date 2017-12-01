@@ -17,6 +17,8 @@ class clientMessage:
 	def __repr__(self):
 		return "Client Source = %s, MsgId = %s," %(self.clientSource,self.MsgId)
 
+
+
 class hearBeatMessage:
 	def __init__(self,leaderId,recvId):	
 		self.leaderId = leaderId
@@ -52,6 +54,29 @@ class Message(object):
 		## Id of the sender
 		self.clientMsg = clientMsg
 
+
+class configurationMessageToAcceptors(Message):
+	def __init__(self,clientMsg,logEntry,newId,recvId):
+		super(configurationMessageToAcceptors,self).__init__(clientMsg)
+		self.logEntry = logEntry
+		self.newId = newId
+		self.recvId = recvId
+	def __repr__(self):
+		return "New Configuration Added : %s" %(self.newId)
+
+
+class configurationMessageToLearners(Message):
+	def __init__(self,clientMsg,logEntry,senderId,newId,recvId):
+		super(configurationMessageToLearners,self).__init__(clientMsg)
+		self.logEntry = logEntry
+		self.newId = newId
+		self.recvId = recvId
+		self.senderId = senderId
+		self.value = clientMsg.value
+		self.leaderId = clientMsg.clientSource
+
+	def __repr__(self):
+		return "New Configuration Added : %s" %(self.newId)
 
 class BallotNum:
 	## Ballot Numbers to be sent

@@ -14,6 +14,8 @@ consoleToProposerQueue = queue.Queue()
 consoleToServerQueue   = queue.Queue()
 stateMachineToServerQueue = queue.Queue()
 consoleToStateMachineQueue = queue.Queue()
+configToProposerQueue = queue.Queue()
+
 
 requestSentToLeaderQueue = deque()
 requestLeaderLock = threading.RLock()
