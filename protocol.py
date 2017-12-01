@@ -2,10 +2,11 @@ from messages import *
 import config
 
 class PaxosProposerProtocol:
-	def __init__(self,agent):
+	def __init__(self,agent,msg):
 		self.agent = agent
 		self.acceptedResponses = {} ## Responses obtained from process for the value proposed by proposer
 		self.sequenceNum = 0
+		self.initMsg = msg
 
 	def sendProposedValueToAllAcceptors(self,clientMsg):
 		## Sending the proposed value to all the acceptors by 

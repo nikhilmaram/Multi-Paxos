@@ -43,7 +43,7 @@ class Proposer(Thread):
 					## Request came from the console which the leader is present
 					print "Current Leader got the client request"
 					config.currLogEntry = config.currLogEntry+1
-					self.handle_client_request(msg)
+					self.handle_client_request(msg,config.currLogEntry)
 				else:
 					## Request came from the console which is not the leader so send it to the leader
 					print "Send the client request to the corresponding leader"
@@ -69,8 +69,14 @@ class Proposer(Thread):
 				if isinstance(msg,sendClientMessageToLeader):
 					## Console message obtained from other process which is not the leader
 					print "Current Leader has got the console message from another process"
-					config.currLogEntry = config.currLogEntry + 1
-					self.handle_client_request(msg.clientMsg)
+					## Check if the message has already been commited to the the proposer. Iterate over all the instances entries
+					resp = self.instancesContainsMessage(msg)
+					if (resp == None):
+						config.currLogEntry = config.currLogEntry + 1
+						self.handle_client_request(msg.clientMsg,config.currLogEntry)
+					else:
+						print "Got the same message again ............"
+						self.handle_client_request(msg.clientMsg,resp)
 				time.sleep(0)	
 
 			if(len(config.requestSentToLeaderQueue) > 0):
@@ -86,13 +92,21 @@ class Proposer(Thread):
 			time.sleep(0)
 
 
-	def handle_client_request(self,msg):
+	def instancesContainsMessage(self,msg):
+		for key in self.instances.keys():
+			instMessage = self.instances[key].initMsg
+			if(msg.clientMsg.msgId == instMessage.msgId):
+				return key
+		return None
+
+
+	def handle_client_request(self,msg,logEntry):
 		## Proposer gets a client request
 		## For now we assume there is no checking of available log entries for multi paxos
 		## The Proposer fixes on a log Entry and runs the Basic Paxos Protocol
-		if config.currLogEntry not in self.instances.keys():
-			self.instances[config.currLogEntry] = PaxosProposerProtocol(self)
-		self.instances[config.currLogEntry].sendProposedValueToAllAcceptors(msg)
+		if logEntry not in self.instances.keys():
+			self.instances[logEntry] = PaxosProposerProtocol(self,msg)
+		self.instances[logEntry].sendProposedValueToAllAcceptors(msg)
 
 
 	def handle_accepted_value_from_acceptor(self,msg):
@@ -120,7 +134,7 @@ class Proposer(Thread):
 		## Combining the phase 1 and phase 2 of paxos 
 		print "Process is initiating the start of the leader - Phase 1"
 		if config.currLogEntry not in self.instances.keys():
-			self.instances[config.currLogEntry] = PaxosProposerProtocol(self)
+			self.instances[config.currLogEntry] = PaxosProposerProtocol(self,msg)
 		self.instances[config.currLogEntry].sendProposedLeaderToAllAcceptors()
 		print "Please Wait......"
 		time.sleep(15)
@@ -129,7 +143,7 @@ class Proposer(Thread):
 		print "Checking after time out"
 		if(config.phase1Leader == self.pid):
 			print "Current process has been chosen as a leader after time out"
-			self.handle_client_request(msg)
+			self.handle_client_request(msg,config.currLogEntry)
 		else :
 			print "Current process has not be chosen as a leader"
 		
