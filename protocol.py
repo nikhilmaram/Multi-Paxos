@@ -137,13 +137,13 @@ class PaxosLearnerAcceptingValueProtocol:
 			print config.log
 			## Check the message that is committed in the log is the one which you have sent to the Leader
 			
+			config.requestLeaderLock.acquire()
 			if(len(config.requestSentToLeaderQueue) > 0):
 				msgSentToLeader = config.requestSentToLeaderQueue[0]
 				if(msgSentToLeader.msgId == msg.clientMsg.msgId):
 					print "Request sent to leader is committed, removing from the queue"
-					config.requestLeaderLock.acquire()
 					config.requestSentToLeaderQueue.pop()
-					config.requestLeaderLock.release()
+			config.requestLeaderLock.release()
 
 			
 	def updateResponse(self,msg):

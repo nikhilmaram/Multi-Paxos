@@ -18,7 +18,7 @@ configToProposerQueue = queue.Queue()
 
 
 requestSentToLeaderQueue = deque()
-requestLeaderLock = threading.RLock()
+requestLeaderLock = threading.Lock()
 
 
 connections_made=[]

@@ -89,6 +89,7 @@ class Proposer(Thread):
 				config.currLogEntry = config.currLogEntry + 1
 				self.handle_configuration_message(newId,config.currLogEntry)		
 
+			config.requestLeaderLock.acquire()
 			if(len(config.requestSentToLeaderQueue) > 0):
 				##print "Checking if request retry is needed"
 				msg = config.requestSentToLeaderQueue[0]
@@ -97,6 +98,7 @@ class Proposer(Thread):
 					### Before retrying check if the leader is still intact
 					msg.timeStamp = time.time()
 					self.leader_check(msg)
+			config.requestLeaderLock.release()
 					
 			self.send_hearbeat()
 			time.sleep(0)
@@ -324,6 +326,7 @@ class StateMachine(Thread):
 				if(msg == "Show"):
 					print config.msgLog
 					print config.log
+					print self.numOfTickets
 			
 			## if there is an index i.e previous check Index + 1 then process it.
 			## if there is a gap in the index then we request for data from other active process
@@ -340,13 +343,13 @@ class StateMachine(Thread):
 						if not isinstance(msg,configurationMessageToLearners):			
 							if (msg.clientMsg.clientSource == self.pid):
 								print "Tickets requested....."
-								if(self.numOfTickets + msg.value < config.totalNumTickets):
+								if(self.numOfTickets + msg.value <= config.totalNumTickets):
 									print "Please take the requested tickets : " + str(msg.value)
 									self.numOfTickets = self.numOfTickets + msg.value
 								else:
 									print "Declined Transaction : Avaiable Tickets : " +str(config.totalNumTickets - self.numOfTickets)
 							else:
-								if(self.numOfTickets + msg.value < config.totalNumTickets):
+								if(self.numOfTickets + msg.value <= config.totalNumTickets):
 									self.numOfTickets = self.numOfTickets + msg.value
 		
 					else:	
