@@ -171,7 +171,7 @@ class server_thread(Thread):
 					## Emptying all the queues connected to server
 
 
-			## Have totally 3 queues which server needs to check
+			## Have totally 4 queues which server needs to check
 
 			## Checking the proposer to server queue the ID in the message is used to get corresponding socket of the receiveing end
 			while(not config.proposerToServerQueue.empty()):
@@ -267,6 +267,7 @@ class client_thread(Thread):
 			if isinstance(recvdMessage,hearBeatMessage):
 				print "Process received HeartBeat Message from " + recvdMessage.leaderId
 				config.prevRecvHeartBeat = time.time()
+				config.currLeader = recvdMessage.leaderId
 
 			## if received message is a message from proposer to acceptor for proposing value then send it to acceptor
 			if isinstance(recvdMessage,sendProposedValueToAcceptors):
