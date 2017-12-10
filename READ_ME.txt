@@ -54,3 +54,15 @@ Hard parts to implement.
 1. No proper documentation for Multi-Paxos. All we have is Paxos replication for one log entry.
 2. Leader being down and multiple process initiating the leader election.
 3. Reconfiguration mechanism when the leader is down.
+
+
+
+User Commands:
+To run :
+python paxos.py <Client Name> <configuration file>
+
+To Buy the tickets:
+Buy <number of Tickets>
+
+To Show the state:
+Show
