@@ -13,7 +13,7 @@ class PaxosProposerProtocol:
 		## Creating the corresponding message and putting them in the server Queue
 		ballotNumInst = BallotNum(self.agent.pid,self.sequenceNum)
 		for recv_id in config.connections_made :
-			print "Protocol : proposer sending proposed values to acceptors"
+			##print "Protocol : proposer sending proposed values to acceptors"
 			proposedValueMessage = sendProposedValueToAcceptors(clientMsg,ballotNumInst,clientMsg.value,config.currLogEntry,self.agent.pid,recv_id)
 			self.agent.proposerToServerQueueLock.acquire()
 			config.proposerToServerQueue.put(proposedValueMessage)
@@ -24,8 +24,8 @@ class PaxosProposerProtocol:
 		## Doing it exactly like the normal messages
 		ballotNumInst = BallotNum(self.agent.pid,self.sequenceNum)
 		for recv_id in config.connections_made :
-			print "Protocol : proposer sending configuration to acceptors"
-			proposedConfigurationMessage = configurationMessageToAcceptors(clientMsg,config.currLogEntry,newId,recv_id)
+			##print "Protocol : proposer sending configuration to acceptors"
+			proposedConfigurationMessage = configurationMessageToAcceptors(clientMsg,config.currLogEntry,newId,recv_id,self.agent.pid)
 			self.agent.proposerToServerQueueLock.acquire()
 			config.proposerToServerQueue.put(proposedConfigurationMessage)
 			self.agent.proposerToServerQueueLock.release()
@@ -38,12 +38,12 @@ class PaxosProposerProtocol:
 		self.sequenceNum += 1
 		ballotNumInst = BallotNum(self.agent.pid,self.sequenceNum)
 		for recv_id in config.connections_made:
-			print "Proposer proposing itself to be the leader"
+			##print "Proposer proposing itself to be the leader"
 			self.agent.proposerToServerQueueLock.acquire()
 			proposedLeaderMessage = sendProposedLeaderToAcceptors(self.agent.pid,recv_id,ballotNumInst,config.currLogEntry)
 			config.proposerToServerQueue.put(proposedLeaderMessage) 
 			self.agent.proposerToServerQueueLock.release()
-			print "Log Value : " + str(config.currLogEntry)
+			##print "Log Value : " + str(config.currLogEntry)
 
 
 
@@ -56,7 +56,7 @@ class PaxosAcceptorProtocol:
 
 	def sendAcceptedValueToProposer(self,msg):
 		if(msg.ballotNum >= self.highestBallotAccepted):
-			print "Protocol :acceptor sending accepted valuee to leader"
+			##print "Protocol :acceptor sending accepted valuee to leader"
 			self.highestBallotAccepted = msg.ballotNum
 			if(self.acceptedVal == None):
 				## Only when the accepted value before is none. This is required to disable rewriting log.
@@ -75,7 +75,7 @@ class PaxosAcceptorProtocol:
 
 	def sendAcceptedValueToAllLearners(self,msg):
 		for recv_id in config.connections_made:
-			print "Protocol :acceptor sending accepted value to learner"
+			##print "Protocol :acceptor sending accepted value to learner"
 			acceptedValueMessage = sendAcceptedValueToLearners(msg.clientMsg,msg.ballotNum,msg.logEntry,self.acceptedVal,self.agent.pid,msg.leaderId,recv_id)
 			self.agent.acceptorToServerQueueLock.acquire()
 			config.acceptorToServerQueue.put(acceptedValueMessage)
@@ -84,17 +84,17 @@ class PaxosAcceptorProtocol:
 
 	def sendAcceptedConfigurationToAllLearners(self,msg):
 		for recv_id in config.connections_made:
-			print "Protocol :acceptor sending accepted configuration to learner"
-			acceptedConfigurationMessage = configurationMessageToLearners(msg.clientMsg,msg.logEntry,self.agent.pid,msg.newId,recv_id)
+			##print "Protocol :acceptor sending accepted configuration to learner"
+			acceptedConfigurationMessage = configurationMessageToLearners(msg.clientMsg,msg.logEntry,self.agent.pid,msg.newId,recv_id,msg.leaderId)
 			self.agent.acceptorToServerQueueLock.acquire()
 			config.acceptorToServerQueue.put(acceptedConfigurationMessage)
 			self.agent.acceptorToServerQueueLock.release()
 
 	def sendAcceptedLeaderToProposer(self,msg):
-		print "Message : Num Value :" + str(msg.ballotNum.num) + " Agent Id : " + str(msg.ballotNum.id)
-		print "Self : Num Value :" + str(self.highestBallotAccepted.num) + " Agent Id : " + str(self.highestBallotAccepted.id)
-		if(msg.ballotNum > self.highestBallotAccepted):
-			print "Protocol : acceptor sending to leader that it has accepted it to be leader"
+		##print "Message : Num Value :" + str(msg.ballotNum.num) + " Agent Id : " + str(msg.ballotNum.id)
+		##print "Self : Num Value :" + str(self.highestBallotAccepted.num) + " Agent Id : " + str(self.highestBallotAccepted.id)
+		if(msg.ballotNum > self.highestBallotAccepted and self.acceptedVal == None):
+			##print "Protocol : acceptor sending to leader that it has accepted it to be leader"
 			self.highestBallotAccepted = msg.ballotNum
 			self.agent.acceptorToServerQueueLock.acquire()
 			config.acceptorToServerQueue.put(sendAcceptedLeaderToProposer(self.agent.pid,msg.leaderId,msg.ballotNum,msg.logEntry))
@@ -111,7 +111,7 @@ class PaxosAcceptorProtocol:
 	def hasMajority(self,msg):
 		majority = len(config.connections_made)/2 + 1
 		if (len(self.responses[msg.ballotNum.num]) >= majority):
-			print "Current Process has been elected as the leader in Phase 1"
+			##print "Current Process has been elected as the leader in Phase 1"
 			config.phase1Leader = self.agent.pid
 		
 		
@@ -133,21 +133,21 @@ class PaxosLearnerAcceptingValueProtocol:
 			config.currLogEntry = msg.logEntry
 			## During the leader election, if there is a race,server getting majority in the second round is winner
 			config.currLeader = msg.leaderId
-			print "value written in log" 
-			print config.log
+			##print "value written in log" 
+			##print config.log
 			## Check the message that is committed in the log is the one which you have sent to the Leader
 			
 			config.requestLeaderLock.acquire()
 			if(len(config.requestSentToLeaderQueue) > 0):
 				msgSentToLeader = config.requestSentToLeaderQueue[0]
 				if(msgSentToLeader.msgId == msg.clientMsg.msgId):
-					print "Request sent to leader is committed, removing from the queue"
+					##print "Request sent to leader is committed, removing from the queue"
 					config.requestSentToLeaderQueue.pop()
 			config.requestLeaderLock.release()
 
 			
 	def updateResponse(self,msg):
-		print "Protocol : learner has received response"
+		##print "Protocol : learner has received response"
 		self.responses[msg.senderId] = msg.value
 		self.hasMajority(msg)
 			

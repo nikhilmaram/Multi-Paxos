@@ -1,7 +1,7 @@
 import Queue as queue
 import threading
 
-
+import time
 from collections import deque
 
 clientToProposerQueue  = queue.Queue()
@@ -32,9 +32,12 @@ currLeader = "Srinu"
 phase1Leader = "Srinu"
 
 
-prevSentHeartBeat = 0
-prevRecvHeartBeat = 0
+prevSentHeartBeat = time.time()
+prevRecvHeartBeat = time.time()
 
+timeout = 5
+checkTimeout = 6
+sleepTime = 100
 log = {}
 
 ## for testing purpose

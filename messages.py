@@ -54,26 +54,45 @@ class Message(object):
 		## Id of the sender
 		self.clientMsg = clientMsg
 
-
-class configurationMessageToAcceptors(Message):
-	def __init__(self,clientMsg,logEntry,newId,recvId):
-		super(configurationMessageToAcceptors,self).__init__(clientMsg)
-		self.logEntry = logEntry
+class configurationMessageToProcess(Message):
+	def __init__(self,clientMsg,newId,recvId):
+		super(configurationMessageToProcess,self).__init__(clientMsg)
 		self.newId = newId
 		self.recvId = recvId
 	def __repr__(self):
 		return "New Configuration Added : %s" %(self.newId)
 
+class configurationMessageToLeader(Message):
+	def __init__(self,clientMsg,newId,recvId,timeStamp):
+		super(configurationMessageToLeader,self).__init__(clientMsg)
+		self.newId = newId
+		self.recvId = recvId
+		self.msgId = clientMsg.msgId
+		self.timeStamp = timeStamp
+	def __repr__(self):
+		return "New Configuration Added : %s" %(self.newId)
+
+
+class configurationMessageToAcceptors(Message):
+	def __init__(self,clientMsg,logEntry,newId,recvId,leaderId):
+		super(configurationMessageToAcceptors,self).__init__(clientMsg)
+		self.logEntry = logEntry
+		self.newId = newId
+		self.recvId = recvId
+		self.leaderId = leaderId
+	def __repr__(self):
+		return "New Configuration Added : %s" %(self.newId)
+
 
 class configurationMessageToLearners(Message):
-	def __init__(self,clientMsg,logEntry,senderId,newId,recvId):
+	def __init__(self,clientMsg,logEntry,senderId,newId,recvId,leaderId):
 		super(configurationMessageToLearners,self).__init__(clientMsg)
 		self.logEntry = logEntry
 		self.newId = newId
 		self.recvId = recvId
 		self.senderId = senderId
 		self.value = clientMsg.value
-		self.leaderId = clientMsg.clientSource
+		self.leaderId = leaderId
 
 	def __repr__(self):
 		return "New Configuration Added : %s" %(self.newId)
@@ -100,7 +119,8 @@ class sendClientMessageToLeader(Message):
 		super(sendClientMessageToLeader,self).__init__(clientMsg)
 		## Here the leader ID is the receiver ID.
 		self.recvId = leaderId
-		self.value  = clientMsg.value		
+		self.value  = clientMsg.value
+		self.msgId = clientMsg.msgId		
 
 
 class sendProposedLeaderToAcceptors:
@@ -151,8 +171,6 @@ class sendAcceptedValueToLearners(Message):
 
 	def __repr__(self):
 		return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
-	##def __str__(self):
-	##	return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
 
 
 
@@ -165,15 +183,17 @@ class sendRequestForLogEntries():
 
 
 class sendLogEntriesMessage(Message):
-	def __init__(self,clientMsg,recvId,value,requestedIndex):
+	def __init__(self,clientMsg,recvId,value,requestedIndex,typeMessage):
 		super(sendLogEntriesMessage,self).__init__(clientMsg)
 		self.value = value
 		self.recvId = recvId
 		self.requestedIndex = requestedIndex	
+		self.typeMessage = typeMessage
 
 	def __repr__(self):
-		return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
-	def __str__(self):
-		return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
+		if(self.typeMessage == "config"):
+			return "New Configuration Added : %s" %(self.clientMsg.clientSource)
+		else:
+			return "Client Requested = %s, Value = %s" %(self.clientMsg.clientSource,self.value)
 
 

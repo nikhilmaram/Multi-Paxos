@@ -34,19 +34,19 @@ class Proposer(Thread):
 			## Need to check if I have received anything from the console queue
 			## If requested propose value to everyone
 			while(not config.consoleToProposerQueue.empty()):
-				print "proposer received a command from console"
+				##print "proposer received a command from console"
 				self.consoleToProposerQueueLock.acquire()
 				msg = config.consoleToProposerQueue.get()
 				self.consoleToProposerQueueLock.release()
 
 				if (config.currLeader == self.pid):
 					## Request came from the console which the leader is present
-					print "Current Leader got the client request"
+					##print "Current Leader got the client request"
 					config.currLogEntry = config.currLogEntry+1
 					self.handle_client_request(msg,config.currLogEntry)
 				else:
 					## Request came from the console which is not the leader so send it to the leader
-					print "Send the client request to the corresponding leader"
+					##print "Send the client request to the corresponding leader"
 					## putting the message in the request to Leader Queue because when the Leader is down
 					## and two servers compete for the leader, only 1 server wins. The message from the lost server
 					## need to be sent to the leader after the time out.
@@ -59,45 +59,95 @@ class Proposer(Thread):
 				time.sleep(0)	
 
 			while(not config.clientToProposerQueue.empty()):
-				print "proposer received a command from client"
+				##print "proposer received a command from client"
 				self.clientToProposerQueueLock.acquire()
 				msg = config.clientToProposerQueue.get()
 				self.clientToProposerQueueLock.release()
 				if isinstance(msg,sendAcceptedValueToLeader):
 					## Message from another acceptor to the leader
 					self.handle_accepted_value_from_acceptor(msg)
-				if isinstance(msg,sendClientMessageToLeader):
+
+				if isinstance(msg,sendClientMessageToLeader) :
 					## Console message obtained from other process which is not the leader
-					print "Current Leader has got the console message from another process"
+					##print "Current Leader has got the console message from another process"
 					## Check if the message has already been commited to the the proposer. Iterate over all the instances entries
 					resp = self.instancesContainsMessage(msg)
 					if (resp == None):
 						config.currLogEntry = config.currLogEntry + 1
 						self.handle_client_request(msg.clientMsg,config.currLogEntry)
 					else:
-						print "Got the same message again ............"
+						##print "Got the same message again ............"
 						self.handle_client_request(msg.clientMsg,resp)
+
+
+				if isinstance(msg,configurationMessageToProcess):
+					## Configuration message need to be sent to the leader
+					if (config.currLeader == self.pid):
+						## Request came from the console which the leader is present
+						##print "Current Leader got the configuration request from new process"
+						## Need to check if the configuration request is sent by existing process
+						resp = self.instancesContainsMessage(msg)
+						if (resp == None):
+							config.currLogEntry = config.currLogEntry + 1
+							self.handle_configuration_request(msg,config.currLogEntry)
+						else:
+							##print "Got the same configuration again ............"
+							self.handle_configuration_request(msg,resp)
+					else:
+						##print "Send the configuration request to the corresponding leader"
+						sendMsg = configurationMessageToLeader(msg.clientMsg,msg.newId,config.currLeader,time.time())
+						config.requestLeaderLock.acquire()
+						config.requestSentToLeaderQueue.append(sendMsg)
+						config.requestLeaderLock.release()
+						self.leader_check_config(sendMsg)
+
+				if isinstance(msg,configurationMessageToLeader):
+					##print "Current leader got the configuration request from existing process"
+					resp = self.instancesContainsMessage(msg)
+					if (resp == None):
+						config.currLogEntry = config.currLogEntry + 1
+						self.handle_configuration_request(msg,config.currLogEntry)
+					else:
+						##print "Got the same configuration again ............"
+						self.handle_configuration_request(msg,resp)
+
 				time.sleep(0)
+
 
 
 			## If there is a configuration change then we get the message from queue
 			while(not config.configToProposerQueue.empty()):
-				print "A new configuration message has been obtained"
+				###print "A new configuration message has been obtained"
+				### Waiting so the appropriate leader will send the heart beat and the configuration message can be sent to it.
+				### The current process cannot act as leader when the leader is down because it doesnt have updated index numbers.
+
 				self.configToProposerQueueLock.acquire()
 				newId = config.configToProposerQueue.get()
 				self.configToProposerQueueLock.release()
-				config.currLogEntry = config.currLogEntry + 1
-				self.handle_configuration_message(newId,config.currLogEntry)		
+
+				clientMsg = clientMessage(self.pid,time.time(),0,self.pid+str(0))
+				for recv_id in config.connections_made :
+					##print "Configuration message sent to the everyone except for itself"
+					if recv_id != self.pid:
+						configMessage = configurationMessageToProcess(clientMsg,self.pid,recv_id)
+						self.proposerToServerQueueLock.acquire()
+						config.proposerToServerQueue.put(configMessage)
+						self.proposerToServerQueueLock.release()
+
+
 
 			config.requestLeaderLock.acquire()
 			if(len(config.requestSentToLeaderQueue) > 0):
 				##print "Checking if request retry is needed"
 				msg = config.requestSentToLeaderQueue[0]
-				if(time.time() - msg.timeStamp > 20):
-					print "No response yet from the leader to the message"
+				if(time.time() - msg.timeStamp > config.checkTimeout):
+					##print "No response yet from the leader to the message"
 					### Before retrying check if the leader is still intact
 					msg.timeStamp = time.time()
-					self.leader_check(msg)
+					if isinstance(msg,configurationMessageToLeader):
+						self.leader_check_config(msg)
+					if isinstance(msg,clientMessage):
+						self.leader_check(msg)
 			config.requestLeaderLock.release()
 					
 			self.send_hearbeat()
@@ -120,9 +170,10 @@ class Proposer(Thread):
 			self.instances[logEntry] = PaxosProposerProtocol(self,msg)
 		self.instances[logEntry].sendProposedValueToAllAcceptors(msg)
 
-	def handle_configuration_message(self,newId,logEntry):
+	def handle_configuration_request(self,msg,logEntry):
 		## Creating this client message just to maintain consisitency with normal messages not required actually.
-		clientMsg = clientMessage(self.pid,time.time(),0,"-1")
+		clientMsg = msg.clientMsg
+		newId = msg.newId
 		if logEntry not in self.instances.keys():
 			self.instances[logEntry] = PaxosProposerProtocol(self,clientMsg)
 		self.instances[logEntry].sendConfigurationMessageToAllAcceptors(newId,clientMsg)
@@ -138,43 +189,60 @@ class Proposer(Thread):
    		self.proposerToServerQueueLock.release()	
 
 	def leader_check(self,msg):
-		if(config.prevRecvHeartBeat + 10 > time.time()):
-			print "Leader is still intact"
+		if(config.prevRecvHeartBeat + config.timeout > time.time()):
+			##print "Leader is still intact"
 			sendMsg = sendClientMessageToLeader(msg,config.currLeader)
 			self.send_to_current_leader(sendMsg)
 		else:	
-			print "Leader is down"
+			##print "Leader is down"
 			config.currLeader = None
 			config.phase1Leader = None
 			config.currLogEntry = config.currLogEntry + 1
 			self.select_leader(msg)	
 
 
+	def leader_check_config(self,msg):
+		if(config.prevRecvHeartBeat + config.timeout > time.time()):
+			##print "Leader is still intact"
+			sendMsg = configurationMessageToLeader(msg.clientMsg,msg.clientMsg.clientSource,config.currLeader,time.time())
+			self.send_to_current_leader(sendMsg)
+		else:	
+			##print "Leader is down"
+			config.currLeader = None
+			config.phase1Leader = None
+			config.currLogEntry = config.currLogEntry + 1
+			self.select_leader(msg)	
+
+
+
 	def select_leader(self,msg):
 		## Combining the phase 1 and phase 2 of paxos 
-		print "Process is initiating the start of the leader - Phase 1"
+		##print "Process is initiating the start of the leader - Phase 1"
 		if config.currLogEntry not in self.instances.keys():
 			self.instances[config.currLogEntry] = PaxosProposerProtocol(self,msg)
 		self.instances[config.currLogEntry].sendProposedLeaderToAllAcceptors()
-		print "Please Wait......"
+		##print "Please Wait......"
 		###time.sleep(15)
 		while(config.phase1Leader == None and config.currLeader == None):
 			continue
-		print "Checking after time out"
+		##print "Checking after time out"
 		if(config.phase1Leader == self.pid):
-			print "Current process has been chosen as a leader after time out"
-			self.handle_client_request(msg,config.currLogEntry)
+			##print "Current process has been chosen as a leader after time out"
+			if isinstance(msg,configurationMessageToLeader):
+				self.handle_configuration_request(msg,config.currLogEntry)
+			else:
+				self.handle_client_request(msg,config.currLogEntry)
 		else :
-			print "Current process has not be chosen as a leader"
+			##print "Current process has not be chosen as a leader"
 			pass
 		
 	
 	def send_hearbeat(self):
 		## Sending Heartbeat
 		if(config.currLeader == self.pid):
-			if (config.prevSentHeartBeat + 10 < time.time()):
+			if (config.prevSentHeartBeat + config.timeout < time.time()):
 				config.prevSentHeartBeat = time.time()
-				print "Sending HeartBeat to all the acceptors"
+				##print "Sending HeartBeat to all the acceptors"
 				self.proposerToServerQueueLock.acquire()
 				for recvId in config.connections_made :
 					config.proposerToServerQueue.put(hearBeatMessage(self.pid,recvId))
@@ -197,7 +265,7 @@ class Acceptor(Thread):
 		while(config.active):
 			## Check if there are any messages in client queue
 			while(not config.clientToAcceptorQueue.empty()):
-				print "acceptor received a message from client"
+				##print "acceptor received a message from client"
 				self.clientToAcceptorQueueLock.acquire()	
 				recvdMsg = config.clientToAcceptorQueue.get()
 				self.clientToAcceptorQueueLock.release()
@@ -232,13 +300,16 @@ class Acceptor(Thread):
 		## if logEntry is already present
 		if logEntry not in self.instances.keys(): 
 			self.instances[logEntry] = PaxosAcceptorProtocol(self)
+			##print "Log Entry created for configuration : " +str(logEntry)
 		self.instances[logEntry].sendAcceptedConfigurationToAllLearners(msg)
 	
 	def handle_leaderMsg_from_proposer(self,msg):
 		## Acceptor has got a proposal from another process which wants to be a leader
-		logEntry = msg.logEntry	
+		logEntry = msg.logEntry
+		##print self.instances	
 		if logEntry not in self.instances.keys(): 
 			self.instances[logEntry] = PaxosAcceptorProtocol(self)
+			##print "Log Entry doesn't exist : " +str(logEntry)
 		self.instances[logEntry].sendAcceptedLeaderToProposer(msg)
 
 	def handle_leaderAcceptance_from_otherProcess(self,msg):
@@ -261,7 +332,7 @@ class Learner(Thread):
 	def run(self):
 		while(config.active):
 			while(not config.clientToLearnerQueue.empty()):
-				print "learner received a message from client"
+				##print "learner received a message from client"
 				self.clientToLearnerQueueLock.acquire()
 				msg = config.clientToLearnerQueue.get()
 				self.clientToLearnerQueueLock.release()
@@ -286,10 +357,15 @@ class Learner(Thread):
 	def send_log_entries(self,msg):
 		## if the process has the requested log entry then it will send the message back to the requestor
 		index = msg.requestedIndex
-		print "In sending Log Entries"
+		##print "In sending Log Entries"
 		if index in config.msgLog.keys():
-			print "Process has the index and sendint the index"
-			sendMsg = sendLogEntriesMessage(config.msgLog[index].clientMsg,msg.senderId,config.msgLog[index].value,msg.requestedIndex)
+			##print "Process has the index and sending the index : " + str(index)
+			if isinstance(config.msgLog[index],configurationMessageToLearners) or (isinstance(config.msgLog[index],sendLogEntriesMessage) and (config.msgLog[index].typeMessage == "config")):
+				##print "Sending with config"
+				sendMsg = sendLogEntriesMessage(config.msgLog[index].clientMsg,msg.senderId,config.msgLog[index].value,msg.requestedIndex,"config")
+			else:
+				##print "Sending without config"
+				sendMsg = sendLogEntriesMessage(config.msgLog[index].clientMsg,msg.senderId,config.msgLog[index].value,msg.requestedIndex,"notconfig")
 			self.learnerToServerQueueLock.acquire()
 			config.learnerToServerQueue.put(sendMsg)
 			self.learnerToServerQueueLock.release()
@@ -297,10 +373,12 @@ class Learner(Thread):
 	def update_log(self,msg):
 		key = msg.requestedIndex
 		if key not in config.msgLog.keys():
-			print "Updated Log Entry"
+			##print "Updated Log Entry"
+			##print type(msg)
+			##print msg.typeMessage
 			config.msgLog[key] = msg
 			config.log[key] = msg.value
-			print config.msgLog
+			##print config.msgLog
 		
 
 ## Start the state machine on a separate thread which checks for the log entries
@@ -324,20 +402,21 @@ class StateMachine(Thread):
 			while(not config.consoleToStateMachineQueue.empty()):
 				msg = config.consoleToStateMachineQueue.get()
 				if(msg == "Show"):
+					print "State Machine Processing Index : " + str(self.currIndex)
 					print config.msgLog
-					print config.log
-					print self.numOfTickets
+					print  "Available Tickets : " +str(config.totalNumTickets - self.numOfTickets)
+					print  "Current Leader : " +str(config.currLeader)
 			
 			## if there is an index i.e previous check Index + 1 then process it.
 			## if there is a gap in the index then we request for data from other active process
 			for key in config.msgLog.keys():			
 				if(key > self.currIndex):
 					self.nextAvailableIndex = key
-					print "Next Available Index = %s , Curr Index : %s" %(str(self.nextAvailableIndex), str(self.currIndex))
-					print "Has an extra key to process ....."
+					##print "Next Available Index = %s , Curr Index : %s" %(str(self.nextAvailableIndex), str(self.currIndex))
+					##print "Has an extra key to process ....."
 					if(self.nextAvailableIndex == self.currIndex + 1):
 						## Now process the log entry
-						print "State Machine processing the log entry......"
+						##print "State Machine processing the log entry......"
 						self.currIndex = self.nextAvailableIndex
 						msg = config.msgLog[self.currIndex]
 						if not isinstance(msg,configurationMessageToLearners):			
@@ -355,14 +434,14 @@ class StateMachine(Thread):
 					else:	
 						self.requestedIndex = self.currIndex + 1
 						## we still didnt get the index which we have requested for, send the request again
-						if((self.prevRequestedIndex == self.requestedIndex) and (self.prevRequestTime + 10 < time.time())):
-							print "Same request trying again"
-							print "Requested Index : " + str(self.requestedIndex)
+						if((self.prevRequestedIndex == self.requestedIndex) and (self.prevRequestTime + config.timeout < time.time())):
+							##print "Same request trying again"
+							##print "Requested Index : " + str(self.requestedIndex)
 							self.prevRequestTime = time.time()
 							self.requestForLogEntries()
 						elif(self.prevRequestedIndex != self.requestedIndex):
-							print "Trying another request"	
-							print "Requested Index : " + str(self.requestedIndex)
+							##print "Trying another request"	
+							##print "Requested Index : " + str(self.requestedIndex)
 							self.prevRequestedIndex = self.requestedIndex
 							self.prevRequestTime = time.time()
 							self.requestForLogEntries()

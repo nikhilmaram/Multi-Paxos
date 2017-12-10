@@ -42,7 +42,7 @@ class console_thread(Thread):
 		Thread.__init__(self)
 		self.name = name
 		self.consoleToProposerQueueLock = consoleToProposerQueueLock
-		self.msgCount = 0 
+		self.msgCount = 1 ## 0 is used for configuration message 
 	
 	def run(self):
 		config.active = True 
@@ -54,7 +54,7 @@ class console_thread(Thread):
 						value = int(line.split()[1])
 					else:
 						value = 1
-					print "Client has input Buy"
+					##print "Client has input Buy"
 					self.msgCount =  self.msgCount + 1
 					msgId = self.name+str(self.msgCount)	
 					msg = clientMessage(self.name,time.time(),value,msgId)
@@ -114,33 +114,33 @@ class config_thread(Thread):
 		config.connections_made.append(name_info[port2client[config.client3_info]])
 		config.ref_client_info[str(port2client[config.client3_info])] = config.client3
 		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client3_info]] + " has been formed."
-		## Send this configuration message to the propser queue if you are the leader
-		if(self.name == config.currLeader):
-			self.configToProposerQueueLock.acquire()
-			config.configToProposerQueue.put(name_info[port2client[config.client3_info]])
-			self.configToProposerQueueLock.release()
+		### Send this configuration message to the propser queue if you are the leader
+		###if(self.name == config.currLeader):
+		###	self.configToProposerQueueLock.acquire()
+		###	config.configToProposerQueue.put(name_info[port2client[config.client3_info]])
+		###	self.configToProposerQueueLock.release()
 
 		config.client4,config.addr4 = config.server_socket.accept()
 		config.client4_info = config.client4.recv(1024)
 		config.connections_made.append(name_info[port2client[config.client4_info]])
 		config.ref_client_info[str(port2client[config.client4_info])] = config.client4
 		print (self.name).upper()+ ": Connection between "+self.name + " and " + name_info[port2client[config.client4_info]] + " has been formed."
-		if(self.name == config.currLeader):
-			self.configToProposerQueueLock.acquire()
-			config.configToProposerQueue.put(name_info[port2client[config.client4_info]])
-			self.configToProposerQueueLock.release()
+		###if(self.name == config.currLeader):
+		###	self.configToProposerQueueLock.acquire()
+		###	config.configToProposerQueue.put(name_info[port2client[config.client4_info]])
+		###	self.configToProposerQueueLock.release()
 
 		##ref_client_info[str(port2client[self.client3_info])] = self.client3		
-		print config.ref_client_info
-		print name_info
-		print client2name
+		##print config.ref_client_info
+		##print name_info
+		##print client2name
 
 
 
 
 
 class server_thread(Thread):
-	def __init__(self,name,port,ip,proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock,stateMachineToServerQueueLock):
+	def __init__(self,name,port,ip,proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock,stateMachineToServerQueueLock,configToProposerQueueLock):
 		Thread.__init__(self)
 		self.name = name
 		self.port = port
@@ -149,6 +149,7 @@ class server_thread(Thread):
 		self.acceptorToServerQueueLock = acceptorToServerQueueLock
 		self.learnerToServerQueueLock  = learnerToServerQueueLock
 		self.stateMachineToServerQueueLock = stateMachineToServerQueueLock
+		self.configToProposerQueueLock = configToProposerQueueLock
 
 	def run(self):
 		##self.invoke_server()
@@ -156,13 +157,19 @@ class server_thread(Thread):
 	
 	def send_info(self):
 		time.sleep(1)
+
+		## Send the configuration message to its proposer so it can send the leader.
+		self.configToProposerQueueLock.acquire()
+		config.configToProposerQueue.put(self.name)
+		self.configToProposerQueueLock.release()
+
 		while(config.active):
 			## This is just used for testing making the server sleep so other process thinks it is dead
 			while(not config.consoleToServerQueue.empty()):
 				msg = config.consoleToServerQueue.get()
 				if (msg == "Sleep"):
 					print "Sleep Started ..............."
-					time.sleep(200)
+					time.sleep(config.sleepTime)
 					print "Sleep Ended ..............."
 					config.proposerToServerQueue.queue.clear()
 					config.acceptorToServerQueue.queue.clear()
@@ -175,38 +182,50 @@ class server_thread(Thread):
 
 			## Checking the proposer to server queue the ID in the message is used to get corresponding socket of the receiveing end
 			while(not config.proposerToServerQueue.empty()):
-				print "proposer put something to server"
+				##print "proposer put something to server"
 				self.proposerToServerQueueLock.acquire()
 				msg = config.proposerToServerQueue.get()
-				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				try:
+					config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				except socket.error as msg:
+					pass
 				self.proposerToServerQueueLock.release()
 				time.sleep(0)
 			
 			## Checking the acceptor to server queue the ID in the message is used to get corresponding socket of the receiveing end
 			while(not config.acceptorToServerQueue.empty()):
-				print "acceptor put something to server"
+				##print "acceptor put something to server"
 				self.acceptorToServerQueueLock.acquire()
 				msg = config.acceptorToServerQueue.get()
-				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				try:
+					config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				except socket.error as msg:
+					pass
 				self.acceptorToServerQueueLock.release()
 				time.sleep(0)
 
 
 			## Checking the learner to server queue the ID in the message is used to get corresponding socket of the receiveing end
 			while(not config.learnerToServerQueue.empty()):
-				print "learner put something to server"
+				##print "learner put something to server"
 				self.learnerToServerQueueLock.acquire()
 				msg = config.learnerToServerQueue.get()
-				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				try :
+					config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				except socket.error as msg:
+					pass
 				self.learnerToServerQueueLock.release()
 				time.sleep(0)
 
 			## Checking for the request made by state machine in case of missing log entries
 			while(not config.stateMachineToServerQueue.empty()):
-				print "State Machine put something to server"
+				##print "State Machine put something to server"
 				self.stateMachineToServerQueueLock.acquire()
 				msg = config.stateMachineToServerQueue.get()
-				config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				try :
+					config.ref_client_info[client2name[msg.recvId]].send(pickle.dumps(msg))
+				except socket.error as msg:
+					pass
 				self.stateMachineToServerQueueLock.release()
 				time.sleep(0)
 				
@@ -255,9 +274,15 @@ class client_thread(Thread):
 		while(config.active):
 
 		## depdending on the message type we put it on corresponding queue
-			recvd = self.client_socket.recv(1024)
-			recvdMessage = pickle.loads(recvd)
-			print "Client received a message"
+			recvdMessage = None
+			try:
+				recvd = self.client_socket.recv(1024)
+				recvdMessage = pickle.loads(recvd)
+			except socket.error as m:
+				pass
+			except EOFError as m:
+				pass
+			##print "Client received a message"
 			
 					
 			## Can be removed later
@@ -265,13 +290,13 @@ class client_thread(Thread):
 				break
 
 			if isinstance(recvdMessage,hearBeatMessage):
-				print "Process received HeartBeat Message from " + recvdMessage.leaderId
+				##print "Process received HeartBeat Message from " + recvdMessage.leaderId
 				config.prevRecvHeartBeat = time.time()
 				config.currLeader = recvdMessage.leaderId
 
 			## if received message is a message from proposer to acceptor for proposing value then send it to acceptor
 			if isinstance(recvdMessage,sendProposedValueToAcceptors):
-				print "client received message from proposer to acceptor to accept value"
+				##print "client received message from proposer to acceptor to accept value"
 				self.clientToAcceptorQueueLock.acquire()
 				config.clientToAcceptorQueue.put(recvdMessage)
 				self.clientToAcceptorQueueLock.release()
@@ -279,7 +304,7 @@ class client_thread(Thread):
 
 			## if received message is a message from proposer to acceptor for proposing configuration then send it to acceptor
 			if isinstance(recvdMessage,configurationMessageToAcceptors):
-				print "client received message from proposer to acceptor to accept configuration"
+				##print "client received message from proposer to acceptor to accept configuration"
 				self.clientToAcceptorQueueLock.acquire()
 				config.clientToAcceptorQueue.put(recvdMessage)
 				self.clientToAcceptorQueueLock.release()
@@ -287,42 +312,42 @@ class client_thread(Thread):
 
 			## if received message is a message from acceptor to learner to accept the configuration then send it to learner
 			if isinstance(recvdMessage,configurationMessageToLearners):
-				print "client received message from acceptot to Learner to accept configuration"
+				##print "client received message from acceptot to Learner to accept configuration"
 				self.clientToLearnerQueueLock.acquire()
 				config.clientToLearnerQueue.put(recvdMessage)
 				self.clientToLearnerQueueLock.release()
 
 			## if received message is a message from acceptor that it has accepted proposed value send it to the proposer
 			if isinstance(recvdMessage,sendAcceptedValueToLeader):
-				print "client received message from acceptor to leader that it has accepted"
+				##print "client received message from acceptor to leader that it has accepted"
 				self.clientToProposerQueueLock.acquire()
 				config.clientToProposerQueue.put(recvdMessage)
 				self.clientToProposerQueueLock.release()
 
 			## if received message is a message from proposer to learner to write into log send it to learner
 			if isinstance(recvdMessage,sendAcceptedValueToLearners):
-				print "client received message from acceptor to learner to accept values"
+				##print "client received message from acceptor to learner to accept values"
 				self.clientToLearnerQueueLock.acquire()
 				config.clientToLearnerQueue.put(recvdMessage)
 				self.clientToLearnerQueueLock.release()
 
 			## if received message is a message from another process and is a console message in that process
 			if isinstance(recvdMessage,sendClientMessageToLeader):
-				print "client received console message from another process which is not the leader"
+				##print "client received console message from another process which is not the leader"
 				self.clientToProposerQueueLock.acquire()
 				config.clientToProposerQueue.put(recvdMessage)
 				self.clientToProposerQueueLock.release()
 
 			## if received message is a message from another process which wants to be leader
 			if isinstance(recvdMessage,sendProposedLeaderToAcceptors):
-				print "client received message from another process which wants to be leader"
+				##print "client received message from another process which wants to be leader"
 				self.clientToAcceptorQueueLock.acquire()
 				config.clientToAcceptorQueue.put(recvdMessage)
 				self.clientToAcceptorQueueLock.release()
 				
 			## if receives message is a message from another process which has accepted the current process to be leader
 			if isinstance(recvdMessage,sendAcceptedLeaderToProposer):
-				print "client received message from another process which has accepted the current process to be leader"
+				##print "client received message from another process which has accepted the current process to be leader"
 				## Putting it on acceptor queue since the proposer thread is waiting for response
 				self.clientToAcceptorQueueLock.acquire()
 				config.clientToAcceptorQueue.put(recvdMessage)
@@ -330,17 +355,31 @@ class client_thread(Thread):
 
 			## if received a message from another process state machine for acquiring logs
 			if isinstance(recvdMessage,sendRequestForLogEntries):
-				print "client received a message from annother process state machine for log entries.Putting the message in learner queue"
+				##print "client received a message from annother process state machine for log entries.Putting the message in learner queue"
 				self.clientToLearnerQueueLock.acquire()
 				config.clientToLearnerQueue.put(recvdMessage)
 				self.clientToLearnerQueueLock.release()
 
 			## if received log entries message from another process, send it to the learner it will update
 			if isinstance(recvdMessage,sendLogEntriesMessage):
-				print "Client received missing log entries from another process"
+				##print "Client received missing log entries from another process"
 				self.clientToLearnerQueueLock.acquire()
 				config.clientToLearnerQueue.put(recvdMessage)
 				self.clientToLearnerQueueLock.release()
+
+			## Configuration message received should be sent to leader. Therefor put the message in the proposer 
+			if isinstance(recvdMessage,configurationMessageToProcess):
+				##print "Received configuration message from newly added process"
+				self.clientToProposerQueueLock.acquire()
+				config.clientToProposerQueue.put(recvdMessage)
+				self.clientToProposerQueueLock.release()
+
+			## Configuration message which is sent to other process is now sent to the leader	
+			if isinstance(recvdMessage,configurationMessageToLeader):
+				##print "Received configuration message from existing process"
+				self.clientToProposerQueueLock.acquire()
+				config.clientToProposerQueue.put(recvdMessage)
+				self.clientToProposerQueueLock.release()
 	
 			time.sleep(0)
 
@@ -360,7 +399,7 @@ def process(argv):
 	configToProposerQueueLock = threading.RLock()	
 
 	console = console_thread(name_info['server'],consoleToProposerQueueLock)
-	server  = server_thread(name_info['server'],port_info['server'],ip_info['server'],proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock,stateMachineToServerQueueLock)
+	server  = server_thread(name_info['server'],port_info['server'],ip_info['server'],proposerToServerQueueLock,acceptorToServerQueueLock,learnerToServerQueueLock,stateMachineToServerQueueLock,configToProposerQueueLock)
 	client  = client_thread(name_info['server'],port_info['server'],ip_info['server'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
 	client1 = client_thread(name_info['client1'],port_info['client1'],ip_info['client1'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
 	client2 = client_thread(name_info['client2'],port_info['client2'],ip_info['client2'],clientToProposerQueueLock,clientToAcceptorQueueLock,clientToLearnerQueueLock)   
